@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>CD Autopilot (Web MVP)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; max-width: 860px; }
+    .card { border: 1px solid #ddd; border-radius: 14px; padding: 16px; margin: 14px 0; }
+    label { display: block; margin: 10px 0 6px; font-weight: 600; }
+    input, select, button, textarea { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ccc; }
+    button { cursor: pointer; font-weight: 700; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .muted { color: #666; font-size: 14px; }
+    pre { background: #f7f7f7; padding: 12px; border-radius: 12px; overflow: auto; }
+    a { color: #0b57d0; }
+  </style>
+</head>
+<body>
+  <h1>CD Autopilot (Web MVP)</h1>
+  <p class="muted">Upload RVT/DWG/PDF → get a draft “Schedules + Notes + Punchlist” bundle (starter Renton, WA codepack).</p>
+
+  <div class="card">
+    <h2>1) Upload</h2>
+    <div class="row">
+      <div>
+        <label>Project location</label>
+        <select id="codepack">
+          <option value="wa-renton">Renton, WA (starter)</option>
+        </select>
+      </div>
+      <div>
+        <label>Project type</label>
+        <select id="ptype">
+          <option value="residential_sfr">Residential SFR</option>
+          <option value="adu">ADU</option>
+        </select>
+      </div>
+    </div>
+
+    <label>Client program / instructions</label>
+    <textarea id="instructions" rows="4" placeholder="Example: 3 bed / 2.5 bath, 2-car garage, modern style..."></textarea>
+
+    <label>Upload file (RVT, DWG, PDF)</label>
+    <input id="file" type="file" />
+
+    <button id="btn">Run CD Autopilot</button>
+    <p id="status" class="muted"></p>
+  </div>
+
+  <div class="card">
+    <h2>2) Results</h2>
+    <div id="results" class="muted">No job yet.</div>
+  </div>
+
+<script>
+const btn = document.getElementById('btn');
+const statusEl = document.getElementById('status');
+const resultsEl = document.getElementById('results');
+
+btn.onclick = async () => {
+  const f = document.getElementById('file').files[0];
+  if (!f) { alert("Please choose a file."); return; }
+
+  statusEl.textContent = "Uploading...";
+  resultsEl.textContent = "Running...";
+
+  const fd = new FormData();
+  fd.append('file', f);
+  fd.append('codepack', document.getElementById('codepack').value);
+  fd.append('project_type', document.getElementById('ptype').value);
+  fd.append('instructions', document.getElementById('instructions').value);
+
+  const r = await fetch('/api/upload', { method: 'POST', body: fd });
+  if (!r.ok) {
+    const t = await r.text();
+    statusEl.textContent = "Error: " + t;
+    return;
+  }
+  const job = await r.json();
+  statusEl.textContent = "Job created: " + job.job_id;
+
+  const s = await fetch('/api/jobs/' + job.job_id);
+  const info = await s.json();
+
+  resultsEl.innerHTML = `
+    <div><b>Status:</b> ${info.status}</div>
+    <div><b>Summary:</b> ${info.summary}</div>
+    <div style="margin-top:10px"><b>Downloads</b></div>
+    <ul>
+      ${info.artifacts.map(a => `<li><a href="/api/jobs/${info.job_id}/download/${a}" target="_blank">${a}</a></li>`).join('')}
+    </ul>
+    <div style="margin-top:10px"><b>Punchlist Preview</b></div>
+    <pre>${info.punchlist_preview}</pre>
+  `;
+};
+</script>
+</body>
+</html>
